@@ -35,6 +35,16 @@
     }
     header h1 { font-size: 18px; font-weight: 700; }
     header .count { font-size: 13px; opacity: 0.85; }
+    header .btn-menu {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px 6px;
+      line-height: 1;
+      opacity: 0.9;
+    }
 
     /* ── Search ── */
     .search-bar {
@@ -291,6 +301,24 @@
     /* ── Loading ── */
     .loading { text-align: center; padding: 16px; color: #888; font-size: 14px; }
 
+    /* ── Menu ── */
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 15px 4px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      font-size: 15px;
+      color: #333;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:active { background: #f5f5f5; border-radius: 8px; }
+    .menu-item .icon { font-size: 22px; width: 28px; text-align: center; }
+    .menu-item .desc { font-size: 12px; color: #999; margin-top: 2px; }
+    .menu-divider { height: 1px; background: #f0f0f0; margin: 8px 0; }
+    .menu-item.danger { color: #c62828; }
+
     /* ── Duplicate warning ── */
     .dup-warning {
       background: #fff8e1;
@@ -307,7 +335,10 @@
 
 <header>
   <h1>📚 家庭书库</h1>
-  <span class="count" id="headerCount"></span>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="count" id="headerCount"></span>
+    <button class="btn-menu" onclick="openMenuModal()" title="更多">⋮</button>
+  </div>
 </header>
 
 <div class="search-bar">
@@ -371,6 +402,53 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImportFile(this)">
+
+<!-- ── 菜单 Modal ── -->
+<div class="modal-overlay" id="menuModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>更多操作</h2>
+      <span class="modal-close" onclick="closeMenuModal()">×</span>
+    </div>
+
+    <div class="menu-item" onclick="exportJSON()">
+      <span class="icon">💾</span>
+      <div>
+        <div>导出书单（JSON）</div>
+        <div class="desc">完整备份，可重新导入恢复</div>
+      </div>
+    </div>
+
+    <div class="menu-item" onclick="exportCSV()">
+      <span class="icon">📊</span>
+      <div>
+        <div>导出书单（CSV）</div>
+        <div class="desc">可用 Excel / WPS 打开查看</div>
+      </div>
+    </div>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-item" onclick="triggerImport()">
+      <span class="icon">📂</span>
+      <div>
+        <div>导入书单（JSON）</div>
+        <div class="desc">从备份文件恢复，重复书自动跳过</div>
+      </div>
+    </div>
+
+    <div class="menu-divider"></div>
+
+    <div class="menu-item danger" onclick="clearAllData()">
+      <span class="icon">🗑️</span>
+      <div>
+        <div>清空所有数据</div>
+        <div class="desc">删除全部书目，不可撤销</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ─────────────────────────────────────────────
@@ -679,6 +757,97 @@ function showToast(msg) {
   t.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────
+// Menu
+// ─────────────────────────────────────────────
+function openMenuModal()  { document.getElementById('menuModal').classList.add('active'); }
+function closeMenuModal() { document.getElementById('menuModal').classList.remove('active'); }
+
+// ─────────────────────────────────────────────
+// Export
+// ─────────────────────────────────────────────
+function exportJSON() {
+  const payload = JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), books }, null, 2);
+  downloadFile(payload, `书库备份_${dateStr()}.json`, 'application/json');
+  closeMenuModal();
+  showToast(`已导出 ${books.length} 本书`);
+}
+
+function exportCSV() {
+  const rows = [['书名','作者','出版社','ISBN','数量','状态','入库时间']];
+  books.forEach(b => rows.push([
+    b.title, b.author||'', b.publisher||'', b.isbn||'',
+    b.count||1,
+    b.status === 'in' ? '在架' : '借出',
+    b.addedAt ? b.addedAt.slice(0,10) : '',
+  ]));
+  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  downloadFile(csv, `书库_${dateStr()}.csv`, 'text/csv;charset=utf-8');
+  closeMenuModal();
+  showToast(`已导出 ${books.length} 本书`);
+}
+
+function downloadFile(content, filename, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function dateStr() {
+  return new Date().toISOString().slice(0,10);
+}
+
+// ─────────────────────────────────────────────
+// Import
+// ─────────────────────────────────────────────
+function triggerImport() {
+  document.getElementById('importFile').value = '';
+  document.getElementById('importFile').click();
+}
+
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const imported = Array.isArray(data) ? data : (data.books || []);
+      if (!imported.length) { showToast('文件中没有书目数据'); return; }
+
+      let added = 0, skipped = 0;
+      imported.forEach(b => {
+        if (!b.title) return;
+        // 按 ISBN 或 id 判断重复
+        const isDup = books.some(x =>
+          (b.isbn && x.isbn === b.isbn) || x.id === b.id
+        );
+        if (isDup) { skipped++; return; }
+        books.push({ ...b, id: b.id || Date.now().toString() + Math.random() });
+        added++;
+      });
+
+      saveData(); renderList(); closeMenuModal();
+      showToast(`导入完成：新增 ${added} 本，跳过重复 ${skipped} 本`);
+    } catch (_) {
+      showToast('文件格式错误，请选择正确的 JSON 备份文件');
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+// ─────────────────────────────────────────────
+// Clear all
+// ─────────────────────────────────────────────
+function clearAllData() {
+  if (!confirm(`确认清空全部 ${books.length} 本书？此操作不可撤销。`)) return;
+  books = [];
+  saveData(); renderList(); closeMenuModal();
+  showToast('已清空');
 }
 
 // ─────────────────────────────────────────────
