@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>家庭书库</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2d6a4f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="家庭书库">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+      background: #f0f4f2;
+      color: #222;
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #2d6a4f;
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    header .count { font-size: 13px; opacity: 0.85; }
+
+    /* ── Search ── */
+    .search-bar {
+      padding: 10px 12px;
+      background: white;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 8px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 20px;
+      font-size: 15px;
+      outline: none;
+      background: #f9f9f9;
+    }
+    .search-bar input:focus { border-color: #2d6a4f; background: white; }
+
+    /* ── Tabs ── */
+    .tab-bar {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid #e8e8e8;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 4px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 14px;
+      color: #888;
+      border-bottom: 2.5px solid transparent;
+      transition: color 0.2s;
+    }
+    .tab.active { color: #2d6a4f; border-bottom-color: #2d6a4f; font-weight: 600; }
+
+    /* ── Book List ── */
+    .book-list { padding: 8px; padding-bottom: 80px; }
+
+    .book-item {
+      background: white;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .book-cover {
+      width: 48px;
+      height: 64px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .book-info { flex: 1; min-width: 0; }
+    .book-title {
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .book-meta { font-size: 12px; color: #888; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .book-status { font-size: 12px; margin-top: 5px; font-weight: 500; }
+    .status-in { color: #2d6a4f; }
+    .status-out { color: #d4640a; }
+
+    .book-actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+    .btn-small {
+      padding: 5px 11px;
+      border: none;
+      border-radius: 12px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .btn-borrow { background: #fff3e0; color: #d4640a; }
+    .btn-return { background: #e8f5e9; color: #2d6a4f; }
+    .btn-delete { background: #fce4ec; color: #c62828; }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      background: #2d6a4f;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      font-size: 32px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(45,106,79,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      line-height: 1;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: flex-end;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: white;
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 16px 32px;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .modal-header h2 { font-size: 18px; }
+    .modal-close { font-size: 24px; color: #aaa; cursor: pointer; padding: 4px; line-height: 1; }
+
+    /* ── Scanner ── */
+    #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; min-height: 200px; }
+    #reader video { width: 100% !important; }
+
+    .isbn-manual {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .isbn-manual input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+    }
+    .isbn-manual input:focus { border-color: #2d6a4f; }
+    .isbn-manual button {
+      padding: 10px 14px;
+      background: #2d6a4f;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    /* ── Book Preview ── */
+    .book-preview {
+      background: #f5f9f7;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .book-preview-cover {
+      width: 56px;
+      height: 74px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+    .book-preview-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .book-preview-info .title { font-weight: 600; font-size: 15px; }
+    .book-preview-info .meta { font-size: 12px; color: #888; margin-top: 3px; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+    .form-group input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      outline: none;
+    }
+    .form-group input:focus { border-color: #2d6a4f; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: #2d6a4f;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-secondary {
+      width: 100%;
+      padding: 12px;
+      background: #f0f0f0;
+      color: #555;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+    /* ── Empty State ── */
+    .empty { text-align: center; padding: 60px 20px; color: #aaa; }
+    .empty .icon { font-size: 52px; margin-bottom: 14px; }
+    .empty .hint { font-size: 14px; line-height: 1.6; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.78);
+      color: white;
+      padding: 9px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Loading ── */
+    .loading { text-align: center; padding: 16px; color: #888; font-size: 14px; }
+
+    /* ── Duplicate warning ── */
+    .dup-warning {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #795548;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📚 家庭书库</h1>
+  <span class="count" id="headerCount"></span>
+</header>
+
+<div class="search-bar">
+  <input type="search" id="searchInput" placeholder="搜索书名、作者、出版社…" oninput="renderList()">
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="setFilter('all')" id="tabAll">全部</div>
+  <div class="tab" onclick="setFilter('in')" id="tabIn">在架</div>
+  <div class="tab" onclick="setFilter('out')" id="tabOut">借出</div>
+</div>
+
+<div class="book-list" id="bookList"></div>
+
+<button class="fab" onclick="openScanModal()" title="扫码入库">+</button>
+
+<!-- ── 扫码 Modal ── -->
+<div class="modal-overlay" id="scanModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>扫码入库</h2>
+      <span class="modal-close" onclick="closeScanModal()">×</span>
+    </div>
+    <div id="reader"></div>
+    <div class="isbn-manual">
+      <input type="number" id="manualIsbn" placeholder="或手动输入 ISBN">
+      <button onclick="lookupIsbn(document.getElementById('manualIsbn').value)">查询</button>
+    </div>
+    <div id="scanResult"></div>
+  </div>
+</div>
+
+<!-- ── 确认入库 Modal ── -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>确认入库</h2>
+      <span class="modal-close" onclick="closeEditModal()">×</span>
+    </div>
+    <div id="dupWarning"></div>
+    <div id="bookPreview"></div>
+    <div class="form-group">
+      <label>书名 *</label>
+      <input type="text" id="editTitle" placeholder="书名">
+    </div>
+    <div class="form-group">
+      <label>作者</label>
+      <input type="text" id="editAuthor" placeholder="作者">
+    </div>
+    <div class="form-group">
+      <label>出版社</label>
+      <input type="text" id="editPublisher" placeholder="出版社">
+    </div>
+    <div class="form-group">
+      <label>数量</label>
+      <input type="number" id="editCount" value="1" min="1">
+    </div>
+    <button class="btn-primary" onclick="saveBook()">入库</button>
+    <button class="btn-secondary" onclick="closeEditModal()">取消</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// Data
+// ─────────────────────────────────────────────
+const STORAGE_KEY = 'home_library_v2';
+let books = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+let currentFilter = 'all';
+let pendingBook = null;
+let html5QrCode = null;
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
+}
+
+// ─────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────
+function renderList() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  let list = [...books];
+  if (currentFilter === 'in')  list = list.filter(b => b.status === 'in');
+  if (currentFilter === 'out') list = list.filter(b => b.status === 'out');
+  if (q) list = list.filter(b =>
+    b.title.toLowerCase().includes(q) ||
+    (b.author || '').toLowerCase().includes(q) ||
+    (b.publisher || '').toLowerCase().includes(q)
+  );
+
+  const total    = books.length;
+  const inCount  = books.filter(b => b.status === 'in').length;
+  const outCount = books.filter(b => b.status === 'out').length;
+
+  document.getElementById('headerCount').textContent = `共 ${total} 本`;
+  document.getElementById('tabAll').textContent = `全部 (${total})`;
+  document.getElementById('tabIn').textContent  = `在架 (${inCount})`;
+  document.getElementById('tabOut').textContent = `借出 (${outCount})`;
+
+  const el = document.getElementById('bookList');
+  if (list.length === 0) {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="icon">📖</div>
+        <div class="hint">${books.length === 0
+          ? '还没有书<br>点右下角 <strong>+</strong> 开始建库'
+          : '没有找到匹配的书'
+        }</div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(b => {
+    const meta = [b.author, b.publisher].filter(Boolean).join(' · ');
+    const statusText = b.status === 'in'
+      ? `在架 · ${b.count} 本`
+      : `已借出${b.borrower ? '：' + b.borrower : ''}`;
+    return `
+      <div class="book-item">
+        <div class="book-cover">
+          ${b.cover
+            ? `<img src="${b.cover}" onerror="this.parentNode.innerHTML='📗'">`
+            : '📗'}
+        </div>
+        <div class="book-info">
+          <div class="book-title">${escHtml(b.title)}</div>
+          ${meta ? `<div class="book-meta">${escHtml(meta)}</div>` : ''}
+          <div class="book-status ${b.status === 'in' ? 'status-in' : 'status-out'}">
+            ${statusText}
+          </div>
+        </div>
+        <div class="book-actions">
+          ${b.status === 'in'
+            ? `<button class="btn-small btn-borrow" onclick="borrowBook('${b.id}')">借出</button>`
+            : `<button class="btn-small btn-return" onclick="returnBook('${b.id}')">归还</button>`}
+          <button class="btn-small btn-delete" onclick="deleteBook('${b.id}')">删除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  ['all','in','out'].forEach(k => {
+    document.getElementById('tab' + k.charAt(0).toUpperCase() + k.slice(1))
+      .classList.toggle('active', k === f);
+  });
+  renderList();
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────
+// Scanner
+// ─────────────────────────────────────────────
+function openScanModal() {
+  document.getElementById('scanModal').classList.add('active');
+  document.getElementById('scanResult').innerHTML = '';
+  document.getElementById('manualIsbn').value = '';
+
+  setTimeout(() => {
+    html5QrCode = new Html5Qrcode('reader');
+    html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 260, height: 110 } },
+      (decoded) => {
+        const clean = decoded.replace(/[-\s]/g, '');
+        if (/^\d{10,13}$/.test(clean)) {
+          html5QrCode.stop().then(() => {
+            html5QrCode = null;
+            lookupIsbn(clean);
+          });
+        }
+      },
+      () => {}
+    ).catch(() => {
+      document.getElementById('reader').innerHTML =
+        `<div style="padding:24px;color:#c62828;text-align:center;font-size:14px">
+           摄像头启动失败<br>请在下方手动输入 ISBN
+         </div>`;
+    });
+  }, 150);
+}
+
+function closeScanModal() {
+  if (html5QrCode) {
+    html5QrCode.stop().catch(() => {});
+    html5QrCode = null;
+  }
+  document.getElementById('scanModal').classList.remove('active');
+}
+
+// ─────────────────────────────────────────────
+// ISBN Lookup
+// ─────────────────────────────────────────────
+async function lookupIsbn(isbn) {
+  if (!isbn) return;
+  isbn = String(isbn).replace(/[-\s]/g, '');
+  if (!/^\d{10,13}$/.test(isbn)) { showToast('ISBN 格式不对'); return; }
+
+  closeScanModal();
+  showToast('查询中…');
+
+  let book = null;
+
+  // 1. Open Library
+  try {
+    const r = await fetch(
+      `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    const d = await r.json();
+    const v = d[`ISBN:${isbn}`];
+    if (v?.title) {
+      book = {
+        title:     v.title,
+        publisher: v.publishers?.[0]?.name || '',
+        author:    v.authors?.[0]?.name || '',
+        cover:     v.cover?.medium || '',
+      };
+    }
+  } catch (_) {}
+
+  // 2. Google Books fallback
+  if (!book?.title) {
+    try {
+      const r = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      const d = await r.json();
+      const info = d.items?.[0]?.volumeInfo;
+      if (info?.title) {
+        book = {
+          title:     info.title,
+          publisher: info.publisher || '',
+          author:    info.authors?.[0] || '',
+          cover:     (info.imageLinks?.thumbnail || '').replace('http:', 'https:'),
+        };
+      }
+    } catch (_) {}
+  }
+
+  openEditModal(isbn, book);
+}
+
+// ─────────────────────────────────────────────
+// Edit / Confirm Modal
+// ─────────────────────────────────────────────
+function openEditModal(isbn, bookData) {
+  pendingBook = { isbn, ...(bookData || {}) };
+
+  document.getElementById('editTitle').value     = bookData?.title || '';
+  document.getElementById('editAuthor').value    = bookData?.author || '';
+  document.getElementById('editPublisher').value = bookData?.publisher || '';
+  document.getElementById('editCount').value     = 1;
+
+  // Duplicate check (by ISBN)
+  const dup = isbn ? books.find(b => b.isbn === isbn) : null;
+  document.getElementById('dupWarning').innerHTML = dup
+    ? `<div class="dup-warning">⚠️ 书架上已有「${escHtml(dup.title)}」，入库后数量将累加。</div>`
+    : '';
+
+  // Preview card
+  const preview = document.getElementById('bookPreview');
+  if (bookData?.title) {
+    preview.innerHTML = `
+      <div class="book-preview">
+        <div class="book-preview-cover">
+          ${bookData.cover
+            ? `<img src="${bookData.cover}" onerror="this.parentNode.innerHTML='📗'">`
+            : '📗'}
+        </div>
+        <div class="book-preview-info">
+          <div class="title">${escHtml(bookData.title)}</div>
+          <div class="meta">${escHtml([bookData.author, bookData.publisher].filter(Boolean).join(' · '))}</div>
+          <div class="meta" style="color:#bbb">ISBN ${isbn}</div>
+        </div>
+      </div>`;
+  } else {
+    preview.innerHTML = `<p style="font-size:13px;color:#999;margin-bottom:12px">未查到书目信息，请手动填写</p>`;
+  }
+
+  document.getElementById('editModal').classList.add('active');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('active');
+  pendingBook = null;
+}
+
+function saveBook() {
+  const title = document.getElementById('editTitle').value.trim();
+  if (!title) { showToast('请填写书名'); return; }
+
+  const addCount = parseInt(document.getElementById('editCount').value) || 1;
+  const isbn = pendingBook?.isbn || '';
+
+  // Merge if same ISBN exists
+  if (isbn) {
+    const existing = books.find(b => b.isbn === isbn);
+    if (existing) {
+      existing.count = (existing.count || 1) + addCount;
+      saveData(); renderList(); closeEditModal();
+      showToast(`已更新「${title}」，共 ${existing.count} 本`);
+      return;
+    }
+  }
+
+  books.unshift({
+    id:        Date.now().toString(),
+    isbn,
+    title,
+    author:    document.getElementById('editAuthor').value.trim(),
+    publisher: document.getElementById('editPublisher').value.trim(),
+    cover:     pendingBook?.cover || '',
+    count:     addCount,
+    status:    'in',
+    addedAt:   new Date().toISOString(),
+  });
+
+  saveData(); renderList(); closeEditModal();
+  showToast(`入库成功：${title}`);
+}
+
+// ─────────────────────────────────────────────
+// Borrow / Return / Delete
+// ─────────────────────────────────────────────
+function borrowBook(id) {
+  const b = books.find(b => b.id === id);
+  if (!b) return;
+  b.status     = 'out';
+  b.borrowedAt = new Date().toISOString();
+  saveData(); renderList();
+  showToast(`已标记借出：${b.title}`);
+}
+
+function returnBook(id) {
+  const b = books.find(b => b.id === id);
+  if (!b) return;
+  b.status     = 'in';
+  b.returnedAt = new Date().toISOString();
+  saveData(); renderList();
+  showToast(`已归还：${b.title}`);
+}
+
+function deleteBook(id) {
+  const b = books.find(b => b.id === id);
+  if (!b) return;
+  if (!confirm(`确认删除「${b.title}」？`)) return;
+  books = books.filter(x => x.id !== id);
+  saveData(); renderList();
+  showToast('已删除');
+}
+
+// ─────────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+renderList();
+</script>
+</body>
+</html>
